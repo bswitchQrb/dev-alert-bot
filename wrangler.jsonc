@@ -20,6 +20,6 @@
   },
   "kv_namespaces": [
     // 通知済みのデプロイを覚えておき、同じ失敗を何度も通知しない
-    { "binding": "STATE" }
+    { "binding": "STATE", "id": "400b63c7b51c4a28bde864c3042b10aa" }
   ]
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deployFailedMessage, stalePullRequestsMessage } from '../src/discord';
+import { deployFailedMessage, stalePullRequestsMessage, summarizeDependabotTitle } from '../src/discord';
 import { pickStalePullRequests, type PullRequest } from '../src/github';
 import { pickFailedDeploys, type RenderService } from '../src/render';
 
@@ -70,15 +70,59 @@ describe('Discord のメッセージ', () => {
     expect(embed.description).not.toContain('詳細');
   });
 
-  it('長すぎる PR 一覧は Discord の上限に収まるように切る', () => {
+  it('PR の一覧をリポジトリごとの欄に分け、メジャー更新に印を付ける', () => {
+    const embed = stalePullRequestsMessage(
+      [
+        { repo: 'bswitchQrb/onpu', title: 'Bump nanoid from 3.3.11 to 3.3.20', url: 'https://github.com/bswitchQrb/onpu/pull/28', ageDays: 3 },
+        { repo: 'bswitchQrb/onpu', title: 'Bump typescript from 5.9.3 to 7.0.2', url: 'https://github.com/bswitchQrb/onpu/pull/22', ageDays: 4 },
+        { repo: 'bswitchQrb/portfolio', title: 'Bump astro from 6.1.1 to 7.4.13', url: 'https://github.com/bswitchQrb/portfolio/pull/9', ageDays: 5 },
+      ],
+      3,
+    ).embeds[0];
+
+    expect(embed.fields?.map((f) => f.name)).toEqual(['onpu（2 件）', 'portfolio（1 件）']);
+    expect(embed.fields?.[0].value).toBe(
+      [
+        '⚠️ [#22](https://github.com/bswitchQrb/onpu/pull/22) typescript 5.9.3 → 7.0.2 · 4 日',
+        '・ [#28](https://github.com/bswitchQrb/onpu/pull/28) nanoid 3.3.11 → 3.3.20 · 3 日',
+      ].join('\n'),
+    );
+    expect(embed.description).toContain('**3 件**');
+    expect(embed.description).toContain('メジャー更新（2 件）');
+  });
+
+  it('全部同じ日数のときは、日数を省く', () => {
+    const embed = stalePullRequestsMessage(
+      [
+        { repo: 'bswitchQrb/onpu', title: 'Bump nanoid from 3.3.11 to 3.3.20', url: 'https://github.com/bswitchQrb/onpu/pull/28', ageDays: 3 },
+        { repo: 'bswitchQrb/onpu', title: 'Bump postcss from 8.5.8 to 8.5.33', url: 'https://github.com/bswitchQrb/onpu/pull/29', ageDays: 3 },
+      ],
+      3,
+    ).embeds[0];
+    expect(embed.fields?.[0].value).not.toContain('日');
+  });
+
+  it('1 つのリポジトリに PR が多すぎても、欄の上限（1024 文字）に収める', () => {
     const prs = Array.from({ length: 200 }, (_, i) => ({
       repo: 'bswitchQrb/onpu',
-      title: `Bump some-very-long-package-name from 1.0.0 to 2.0.${i}`,
+      title: `Bump some-very-long-package-name from 1.0.0 to 1.0.${i}`,
       url: `https://github.com/bswitchQrb/onpu/pull/${i}`,
       ageDays: 5,
     }));
-    const embed = stalePullRequestsMessage(prs, 3).embeds[0];
-    expect(embed.description.length).toBeLessThanOrEqual(4096);
-    expect(embed.title).toContain('200 件');
+    const value = stalePullRequestsMessage(prs, 3).embeds[0].fields?.[0].value ?? '';
+    expect(value.length).toBeLessThanOrEqual(1024);
+    expect(value).toMatch(/\[…ほか \d+ 件\]\(https:\/\/github\.com\/bswitchQrb\/onpu\/pulls\/app%2Fdependabot\)$/);
+  });
+});
+
+describe('summarizeDependabotTitle', () => {
+  it.each([
+    ['Bump typescript from 5.9.3 to 7.0.2', 'typescript 5.9.3 → 7.0.2', true],
+    ['Bump nanoid from 3.3.11 to 3.3.20', 'nanoid 3.3.11 → 3.3.20', false],
+    ['Bump the npm-minor-patch group across 1 directory with 8 updates', 'npm-minor-patch グループ（8 件）', false],
+    ['Bump the actions group with 5 updates', 'actions グループ（5 件）', false],
+    ['Update something else', 'Update something else', false],
+  ])('%s', (title, text, major) => {
+    expect(summarizeDependabotTitle(title)).toEqual({ text, major });
   });
 });
