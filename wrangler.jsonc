@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dev-alert-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  // HTTP では何も公開しない（Cron だけで動く）
+  "workers_dev": false,
+  "triggers": {
+    "crons": [
+      // 15 分ごと：Render のデプロイ失敗を確認
+      "*/15 * * * *",
+      // 毎朝 9:00（JST）：放置されている Dependabot の PR をまとめて通知
+      "0 0 * * *"
+    ]
+  },
+  "vars": {
+    "GITHUB_OWNER": "bswitchQrb",
+    "STALE_PR_DAYS": "3"
+  },
+  "kv_namespaces": [
+    // 通知済みのデプロイを覚えておき、同じ失敗を何度も通知しない
+    { "binding": "STATE" }
+  ]
+}
