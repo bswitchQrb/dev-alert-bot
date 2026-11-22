@@ -28,3 +28,7 @@ cp .dev.vars.example .dev.vars   # 値を入れる
 npm run dev                      # http://localhost:8787/__scheduled?cron=*/15+*+*+*+* で Cron を手動実行
 npm test
 ```
+
+## ライセンス
+
+[MIT License](LICENSE) © 2026 bswitchQrb
