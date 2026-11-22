@@ -54,21 +54,31 @@ export function summarizeDependabotTitle(title: string): { text: string; major: 
   return { text: title, major: false };
 }
 
-function prLine(pr: StalePullRequest): string {
+function prLine(pr: StalePullRequest, showAge: boolean): string {
   const { text, major } = summarizeDependabotTitle(pr.title);
-  const number = pr.url.split('/').pop();
-  return `${major ? '⚠️' : '・'} [#${number}](${pr.url}) ${text}（${pr.ageDays} 日）`;
+  const age = showAge ? ` · ${pr.ageDays} 日` : '';
+  return `${major ? '⚠️' : '・'} [#${prNumber(pr)}](${pr.url}) ${text}${age}`;
 }
 
-/** 1 つの欄（field）に収まるように行を詰める。あふれた分は「ほか N 件」にする */
-function fitLines(lines: string[], limit: number): string {
+function prNumber(pr: StalePullRequest): number {
+  return Number(pr.url.split('/').pop());
+}
+
+/** メジャー更新を上に、その中は PR の番号順に並べる */
+function sortForDisplay(prs: StalePullRequest[]): StalePullRequest[] {
+  const isMajor = (pr: StalePullRequest) => summarizeDependabotTitle(pr.title).major;
+  return [...prs].sort((a, b) => Number(isMajor(b)) - Number(isMajor(a)) || prNumber(a) - prNumber(b));
+}
+
+/** 1 つの欄（field）に収まるように行を詰める。あふれた分は、PR 一覧へのリンク付きの「ほか N 件」にする */
+function fitLines(lines: string[], limit: number, moreUrl: string): string {
+  const more = (n: number) => `[…ほか ${n} 件](${moreUrl})`;
   const kept: string[] = [];
   for (const [i, line] of lines.entries()) {
     const rest = lines.length - i;
-    const candidate = [...kept, line].join('\n');
-    const suffix = rest > 1 ? `\n…ほか ${rest - 1} 件` : '';
-    if (candidate.length + suffix.length > limit) {
-      return `${kept.join('\n')}\n…ほか ${rest} 件`;
+    const suffix = rest > 1 ? `\n${more(rest - 1)}` : '';
+    if ([...kept, line].join('\n').length + suffix.length > limit) {
+      return `${kept.join('\n')}\n${more(rest)}`;
     }
     kept.push(line);
   }
@@ -78,16 +88,21 @@ function fitLines(lines: string[], limit: number): string {
 export function stalePullRequestsMessage(prs: StalePullRequest[], staleDays: number): DiscordMessage {
   const byRepo = new Map<string, StalePullRequest[]>();
   for (const pr of prs) {
-    const repo = pr.repo.split('/').pop() ?? pr.repo;
-    byRepo.set(repo, [...(byRepo.get(repo) ?? []), pr]);
+    byRepo.set(pr.repo, [...(byRepo.get(pr.repo) ?? []), pr]);
   }
+  // 全部同じ日数なら、各行の日数は省く
+  const showAge = new Set(prs.map((pr) => pr.ageDays)).size > 1;
 
   const fields = [...byRepo.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(0, MAX_FIELDS)
     .map(([repo, items]) => ({
-      name: `${repo}（${items.length} 件）`,
-      value: fitLines(items.map(prLine), MAX_FIELD_VALUE),
+      name: `${repo.split('/').pop()}（${items.length} 件）`,
+      value: fitLines(
+        sortForDisplay(items).map((pr) => prLine(pr, showAge)),
+        MAX_FIELD_VALUE,
+        `https://github.com/${repo}/pulls/app%2Fdependabot`,
+      ),
     }));
 
   const majors = prs.filter((pr) => summarizeDependabotTitle(pr.title).major).length;

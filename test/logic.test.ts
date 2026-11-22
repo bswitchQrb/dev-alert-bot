@@ -73,8 +73,8 @@ describe('Discord のメッセージ', () => {
   it('PR の一覧をリポジトリごとの欄に分け、メジャー更新に印を付ける', () => {
     const embed = stalePullRequestsMessage(
       [
-        { repo: 'bswitchQrb/onpu', title: 'Bump typescript from 5.9.3 to 7.0.2', url: 'https://github.com/bswitchQrb/onpu/pull/22', ageDays: 4 },
         { repo: 'bswitchQrb/onpu', title: 'Bump nanoid from 3.3.11 to 3.3.20', url: 'https://github.com/bswitchQrb/onpu/pull/28', ageDays: 3 },
+        { repo: 'bswitchQrb/onpu', title: 'Bump typescript from 5.9.3 to 7.0.2', url: 'https://github.com/bswitchQrb/onpu/pull/22', ageDays: 4 },
         { repo: 'bswitchQrb/portfolio', title: 'Bump astro from 6.1.1 to 7.4.13', url: 'https://github.com/bswitchQrb/portfolio/pull/9', ageDays: 5 },
       ],
       3,
@@ -83,12 +83,23 @@ describe('Discord のメッセージ', () => {
     expect(embed.fields?.map((f) => f.name)).toEqual(['onpu（2 件）', 'portfolio（1 件）']);
     expect(embed.fields?.[0].value).toBe(
       [
-        '⚠️ [#22](https://github.com/bswitchQrb/onpu/pull/22) typescript 5.9.3 → 7.0.2（4 日）',
-        '・ [#28](https://github.com/bswitchQrb/onpu/pull/28) nanoid 3.3.11 → 3.3.20（3 日）',
+        '⚠️ [#22](https://github.com/bswitchQrb/onpu/pull/22) typescript 5.9.3 → 7.0.2 · 4 日',
+        '・ [#28](https://github.com/bswitchQrb/onpu/pull/28) nanoid 3.3.11 → 3.3.20 · 3 日',
       ].join('\n'),
     );
     expect(embed.description).toContain('**3 件**');
     expect(embed.description).toContain('メジャー更新（2 件）');
+  });
+
+  it('全部同じ日数のときは、日数を省く', () => {
+    const embed = stalePullRequestsMessage(
+      [
+        { repo: 'bswitchQrb/onpu', title: 'Bump nanoid from 3.3.11 to 3.3.20', url: 'https://github.com/bswitchQrb/onpu/pull/28', ageDays: 3 },
+        { repo: 'bswitchQrb/onpu', title: 'Bump postcss from 8.5.8 to 8.5.33', url: 'https://github.com/bswitchQrb/onpu/pull/29', ageDays: 3 },
+      ],
+      3,
+    ).embeds[0];
+    expect(embed.fields?.[0].value).not.toContain('日');
   });
 
   it('1 つのリポジトリに PR が多すぎても、欄の上限（1024 文字）に収める', () => {
@@ -100,7 +111,7 @@ describe('Discord のメッセージ', () => {
     }));
     const value = stalePullRequestsMessage(prs, 3).embeds[0].fields?.[0].value ?? '';
     expect(value.length).toBeLessThanOrEqual(1024);
-    expect(value).toMatch(/…ほか \d+ 件$/);
+    expect(value).toMatch(/\[…ほか \d+ 件\]\(https:\/\/github\.com\/bswitchQrb\/onpu\/pulls\/app%2Fdependabot\)$/);
   });
 });
 
